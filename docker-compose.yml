@@ -1,6 +1,6 @@
 # docker-compose-fastapi.yml
 # Only FastAPI, connects to existing Neo4j and Qdrant containers
-version: "3.12.1" # version is optional
+version: "3.8" # version is optional
 
 services:
   fastapi:
