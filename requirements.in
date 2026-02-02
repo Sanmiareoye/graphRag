@@ -1,9 +1,7 @@
 numpy>=1.26,<2
 sentence-transformers
-chromadb
 langchain
 langchain-text-splitters
-pdfplumber
 pymupdf-layout
 pymupdf4llm
 python-igraph
@@ -13,4 +11,3 @@ python-dotenv
 neo4j
 qdrant-client
 boto3
-anthropic
