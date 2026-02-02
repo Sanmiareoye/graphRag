@@ -18,7 +18,7 @@
 
         output.textContent = "";
 
-        const res = await fetch("http://127.0.0.1:8000/search/stream", {
+        const res = await fetch("http://18.224.3.198:8000/search/stream", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query: q }),
