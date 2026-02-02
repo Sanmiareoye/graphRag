@@ -8,9 +8,9 @@ import requests
 
 from graph_retrieval import (
     GraphRetrieval,
-)  # <-- your existing file
+)
 
-app = FastAPI(title="Graph RAG + Ollama API")
+app = FastAPI(title="Graph RAG + Bedrock")
 
 # -----------------------------
 # CORS configuration
@@ -41,7 +41,7 @@ retriever = GraphRetrieval()
 @app.get("/")
 async def root():
     return {
-        "message": "Graph RAG + Ollama API",
+        "message": "Graph RAG + Bedrock",
         "endpoint": "POST /search/ - send JSON {'query': 'your question'}",
     }
 
@@ -49,7 +49,7 @@ async def root():
 # -----------------------------
 # POST endpoint for frontend queries
 # -----------------------------
-@app.post("/search/")
+@app.post("/ask/")
 async def search_query(payload: QueryRequest):
     query = payload.query
     try:
@@ -78,7 +78,7 @@ async def search_query(payload: QueryRequest):
         )
 
 
-@app.post("/search/stream")
+@app.post("/ask/stream")
 async def search_query_stream(payload: QueryRequest):
     query = payload.query
     try:
