@@ -1,0 +1,29 @@
+# docker-compose-fastapi.yml
+# Only FastAPI, connects to existing Neo4j and Qdrant containers
+version: "3.12.1" # version is optional
+
+services:
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: graph-rag-api
+    ports:
+      - "8000:8000"
+    environment:
+      # Point to existing DB containers or host
+      - NEO4J_URI=${NEO4J_URI_LOCAL}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - QDRANT_URI=${QDRANT_URI_LOCAL}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+    networks:
+      - graph-rag-network
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs # optional: persist logs
+
+networks:
+  graph-rag-network:
+    driver: bridge

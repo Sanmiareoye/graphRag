@@ -1,0 +1,11 @@
+.bash_profile
+venv/
+.env
+__pycache__/
+*.pyc
+docs/
+*.pdf
+uneeded_files/
+retreival.txt
+logs/
+requirements.in.env
