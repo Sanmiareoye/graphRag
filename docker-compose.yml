@@ -23,6 +23,28 @@ services:
     restart: unless-stopped
     volumes:
       - ./logs:/app/logs # optional: persist logs
+  qdrant:
+    image: qdrant/qdrant
+    container_name: qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+    networks:
+      - graph-rag-network
+
+  neo4j:
+    image: neo4j:5
+    container_name: neo4j
+    environment:
+      - NEO4J_AUTH=neo4j/your_neo4j_password
+    ports:
+      - "7687:7687"
+      - "7474:7474"
+    volumes:
+      - ./neo4j_data:/data
+    networks:
+      - graph-rag-network
 
 networks:
   graph-rag-network:
