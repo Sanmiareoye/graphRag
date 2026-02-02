@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Streaming Query Test</title>
+  </head>
+  <body>
+    <h2>Live Streaming Test</h2>
+
+    <input id="query" style="width: 400px" placeholder="Ask something..." />
+    <button onclick="streamQuery()">Send</button>
+
+    <pre id="output"></pre>
+
+    <script>
+      async function streamQuery() {
+        const q = document.getElementById("query").value;
+        const output = document.getElementById("output");
+
+        output.textContent = "";
+
+        const res = await fetch("http://127.0.0.1:8000/search/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: q }),
+        });
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          output.textContent += decoder.decode(value);
+        }
+      }
+    </script>
+  </body>
+</html>
