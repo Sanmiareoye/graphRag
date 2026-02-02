@@ -1,11 +1,16 @@
 from neo4j import GraphDatabase
+import os
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+neo4j_uri = os.getenv("NEO4J_URI_LOCAL")
+neo4j_pw = os.getenv("NEO4J_PASSWORD")
 
 
 class GraphStatsPrinter:
     def __init__(self):
-        self.neo4j = GraphDatabase.driver(
-            "bolt://localhost:7687", auth=("neo4j", "arkaDodGraphRag1")
-        )
+        self.neo4j = GraphDatabase.driver(neo4j_uri, auth=("neo4j", neo4j_pw))
 
     def print_stats(self):
         with self.neo4j.session() as session:
