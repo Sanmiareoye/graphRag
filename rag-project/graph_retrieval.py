@@ -25,17 +25,13 @@ neo4j_uri = os.getenv("NEO4J_URI_LOCAL")
 
 class GraphRetrieval:
     def __init__(self):
-        # Qdrant (Vector DB)
         self.qdrant = QdrantClient(url=qdrant_uri)
         self.collection_name = "dod_docs"
 
-        # Neo4j (Graph DB)
         self.neo4j = GraphDatabase.driver(neo4j_uri, auth=("neo4j", neo4j_pw))
 
-        # Embedding model
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
 
-        # AWS Bedrock setup
         self.bedrock = boto3.client(
             "bedrock-runtime",
             region_name=aws_region,
@@ -48,12 +44,12 @@ class GraphRetrieval:
             "llama3-1-8b": "us.meta.llama3-1-8b-instruct-v1:0",  # $138/mo - Fast, cheap, but repetition issues
             "llama3-3-70b": "us.meta.llama3-3-70b-instruct-v1:0",  # $167/mo - Best quality/price
             "llama3-1-70b": "us.meta.llama3-1-70b-instruct-v1:0",  # $167/mo - Same price as 3.3, use 3.3 instead
-            # Mistral Models (direct model IDs, not inference profiles)
+            # Mistral Models 
             "ministral-3b": "mistral.ministral-3-3b-instruct",  # $134/mo - Smallest, cheapest
             "ministral-8b": "mistral.ministral-3-8b-instruct",  # $141/mo - Good alternative to Llama 8B
             "ministral-14b": "mistral.ministral-3-14b-instruct",  # ~$150/mo - More capable Ministral
             "mistral-large-3": "mistral.mistral-large-3-675b-instruct",  # $176/mo - Premium Mistral
-            # Claude Models (inference profiles)
+            # Claude Models
             "claude-haiku": "us.anthropic.claude-3-5-haiku-20241022-v2:0",  # $231/mo - Best quality, fastest
             "claude-sonnet": "us.anthropic.claude-3-5-sonnet-20241022-v2:0",  # $640/mo - Overkill for your use case
         }
@@ -71,7 +67,6 @@ class GraphRetrieval:
         print(f"QUERY: {query}")
         print("=" * 60)
 
-        # Vector search
         print("\n📍 Step 1: Vector search for initial chunks...")
         query_embedding = self.model.encode(query).tolist()
 
@@ -102,7 +97,6 @@ class GraphRetrieval:
             )
         print(f"Found {len(initial_chunks)} chunks from vector search")
 
-        # Super-communities
         with self.neo4j.session() as session:
             super_result = session.run(
                 """
@@ -120,7 +114,6 @@ class GraphRetrieval:
 
         super_ids = [sc["super_id"] for sc in super_communities]
 
-        # Expand chunks from L1 communities
         with self.neo4j.session() as session:
             result = session.run(
                 """
@@ -152,7 +145,6 @@ class GraphRetrieval:
                 )
                 embeddings.append(np.array(record["embedding"]))
 
-        # Semantic ranking
         if expanded_chunks:
             query_vec = np.array(query_embedding)
             sims = [
@@ -180,26 +172,16 @@ class GraphRetrieval:
     # NON-STREAMING: Generate Answer
     # ==============================
     def generate_answer_with_llm(self, query, chunks):
-        """
-        Generate answer using AWS Bedrock (non-streaming)
-
-        Args:
-            query: User query
-            chunks: Retrieved document chunks
-        """
         print("\n" + "=" * 60)
         print("🤖 GENERATING ANSWER WITH BEDROCK")
         print("=" * 60)
 
-        # Build context from chunks
         context_parts = []
         for i, chunk in enumerate(chunks, 1):
             source_tag = f"[{chunk['source']} p.{chunk['page']}]"
             context_parts.append(f"{source_tag}\n{chunk['content']}")
 
         context = "\n\n".join(context_parts)
-
-        # Create prompt
         prompt = f"""You are a helpful assistant answering questions about military and Department of Defense documents.
 
 Based on the following document excerpts, answer the user's question. Be specific and cite sources when possible.
@@ -254,17 +236,12 @@ ANSWER (be comprehensive but concise, do not ask if the user needs clarification
     # STREAMING: Generate Answer
     # ==============================
     def stream_answer_with_llm(self, query, chunks):
-        """
-        Generator function that streams Bedrock output token-by-token.
-        """
-        # Build context from chunks
         context_parts = []
         for chunk in chunks:
             source_tag = f"[{chunk['source']} p.{chunk['page']}]"
             context_parts.append(f"{source_tag}\n{chunk['content']}")
         context = "\n\n".join(context_parts)
 
-        # Create prompt
         prompt = f"""You are a helpful assistant answering questions about military and Department of Defense documents.
 
 Based on the following document excerpts, answer the user's question. Be very specific and descriptive, cite sources when possible.
@@ -277,7 +254,6 @@ QUESTION: {query}
 ANSWER (be comprehensive but concise, do not ask if the user needs clarification):"""
 
         try:
-            # Call Bedrock with streaming
             response = self.bedrock.invoke_model_with_response_stream(
                 modelId=self.model_id,
                 contentType="application/json",
@@ -298,7 +274,6 @@ ANSWER (be comprehensive but concise, do not ask if the user needs clarification
                 ),
             )
 
-            # Stream the response
             stream = response.get("body")
             if stream:
                 for event in stream:
