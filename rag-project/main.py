@@ -12,9 +12,6 @@ from graph_retrieval import (
 
 app = FastAPI(title="Graph RAG + Bedrock")
 
-# -----------------------------
-# CORS configuration
-# -----------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,20 +21,12 @@ app.add_middleware(
 )
 
 
-# -----------------------------
-# Request & Response Models
-# -----------------------------
 class QueryRequest(BaseModel):
     query: str
 
 
-# Instantiate the retriever once for the app
 retriever = GraphRetrieval()
 
-
-# -----------------------------
-# Root endpoint
-# -----------------------------
 @app.get("/")
 async def root():
     return {
@@ -46,14 +35,10 @@ async def root():
     }
 
 
-# -----------------------------
-# POST endpoint for frontend queries
-# -----------------------------
 @app.post("/ask/")
 async def search_query(payload: QueryRequest):
     query = payload.query
     try:
-        # Run the complete pipeline (retrieval + Ollama)
         chunks, answer = retriever.run_complete_pipeline(query)
 
         if answer is None:
@@ -62,7 +47,6 @@ async def search_query(payload: QueryRequest):
                 content={"error": "Failed to generate answer from Ollama"},
             )
 
-        # Return answer (and optionally the chunks)
         return JSONResponse(
             content={
                 "query": query,
@@ -85,7 +69,6 @@ async def search_query_stream(payload: QueryRequest):
         chunks = retriever.graph_enhanced_search(query)
         generator = retriever.stream_answer_with_llm(query, chunks)
 
-        # StreamingResponse sends token-by-token
         return StreamingResponse(generator, media_type="text/plain")
     except Exception as e:
         return JSONResponse(
