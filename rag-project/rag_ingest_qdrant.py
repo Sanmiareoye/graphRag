@@ -1,5 +1,3 @@
-# rag-ingest-qdrant.py
-
 import os
 from typing import List, Dict
 from sentence_transformers import SentenceTransformer
@@ -15,10 +13,6 @@ load_dotenv()
 
 api_key = os.getenv("QDRANT_APIKEY")
 
-
-# ========================================
-# SECTION 1: DOCUMENT LOADING & CHUNKING
-# ========================================
 def load_and_chunk_documents():
     documents = []
 
@@ -56,7 +50,6 @@ def load_and_chunk_documents():
                 }
             )
 
-    # Chunking (unchanged)
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=900,
         chunk_overlap=100,
@@ -83,24 +76,15 @@ def load_and_chunk_documents():
 
     print(f"Total chunks created: {len(all_chunks)}")
     return all_chunks
-
-
-# ========================================
-# SECTION 2: PUSH TO QDRANT
-# ========================================
-
-
+    
 def setup_vector_database(chunks: List[Dict]):
-    # Connect to local Qdrant Docker container
     client = QdrantClient(url="http://localhost:6333", api_key=api_key)
     COLLECTION_NAME = "dod_docs"
-
-    # Initialize embedding model
+    
     model = SentenceTransformer("all-MiniLM-L6-v2")
     documents = [chunk["content"] for chunk in chunks]
     embeddings = model.encode(documents)
 
-    # Prepare points for Qdrant
     points = []
     for i, chunk in enumerate(chunks):
         points.append(
@@ -125,12 +109,7 @@ def setup_vector_database(chunks: List[Dict]):
         client.upsert(collection_name=COLLECTION_NAME, points=batch)
         print(f"  Uploaded batch {i//batch_size + 1}/{len(points)//batch_size + 1}")
 
-    print(f"✅ Uploaded {len(points)} chunks to Qdrant!")
-
-
-# ========================================
-# RUN
-# ========================================
+    print(f"Uploaded {len(points)} chunks to Qdrant!")
 
 if __name__ == "__main__":
     chunks = load_and_chunk_documents()
