@@ -1,6 +1,3 @@
-# rag-ingest-qdrant.py
-
-import os
 from typing import List, Dict
 from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient
@@ -8,28 +5,22 @@ from qdrant_client.models import PointStruct
 from text_extraction2 import load_pdf_as_text
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import uuid
-from dotenv import load_dotenv
 import boto3
 
-load_dotenv()
-
-api_key = os.getenv("QDRANT_APIKEY")
+from config import config
 
 
-# ========================================
-# SECTION 1: DOCUMENT LOADING & CHUNKING
-# ========================================
 def load_and_chunk_documents():
     documents = []
 
     s3 = boto3.resource(
         "s3",
-        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-        region_name=os.getenv("AWS_REGION"),
+        aws_access_key_id=config.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=config.AWS_SECRET_ACCESS_KEY,
+        region_name=config.AWS_REGION,
     )
 
-    bucket = s3.Bucket("dodpdfchunking")
+    bucket = s3.Bucket(config.S3_BUCKET_NAME)
 
     for obj in bucket.objects.filter(Prefix="raw/"):
         if not obj.key.lower().endswith(".pdf"):
@@ -56,10 +47,9 @@ def load_and_chunk_documents():
                 }
             )
 
-    # Chunking (unchanged)
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=900,
-        chunk_overlap=100,
+        chunk_size=config.CHUNK_SIZE,
+        chunk_overlap=config.CHUNK_OVERLAP,
         length_function=len,
         separators=["\n\n", "\n", " ", ""],
     )
@@ -85,22 +75,14 @@ def load_and_chunk_documents():
     return all_chunks
 
 
-# ========================================
-# SECTION 2: PUSH TO QDRANT
-# ========================================
-
-
 def setup_vector_database(chunks: List[Dict]):
-    # Connect to local Qdrant Docker container
-    client = QdrantClient(url="http://localhost:6333", api_key=api_key)
-    COLLECTION_NAME = "dod_docs"
+    client = QdrantClient(url=config.QDRANT_URI, api_key=config.QDRANT_API_KEY)
+    COLLECTION_NAME = config.COLLECTION_NAME
 
-    # Initialize embedding model
-    model = SentenceTransformer("all-MiniLM-L6-v2")
+    model = SentenceTransformer(config.EMBEDDING_MODEL)
     documents = [chunk["content"] for chunk in chunks]
     embeddings = model.encode(documents)
 
-    # Prepare points for Qdrant
     points = []
     for i, chunk in enumerate(chunks):
         points.append(
@@ -127,10 +109,6 @@ def setup_vector_database(chunks: List[Dict]):
 
     print(f"✅ Uploaded {len(points)} chunks to Qdrant!")
 
-
-# ========================================
-# RUN
-# ========================================
 
 if __name__ == "__main__":
     chunks = load_and_chunk_documents()

@@ -1,4 +1,3 @@
-# text_extraction2.py
 import pymupdf.layout
 import pymupdf4llm
 import fitz

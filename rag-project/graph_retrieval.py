@@ -1,61 +1,41 @@
-# graph_retrieval.py
-"""
-Graph-Enhanced Retrieval WITH AWS Bedrock Response Generation
-Supports:
-- Full answer (JSON)
-- Live streaming (generator)
-"""
-
 from qdrant_client import QdrantClient
 from neo4j import GraphDatabase
 from sentence_transformers import SentenceTransformer
 import boto3
 import json
 import numpy as np
-from dotenv import load_dotenv
-import os
 
-load_dotenv()
-
-neo4j_pw = os.getenv("NEO4J_PASSWORD")
-qdrant_uri = os.getenv("QDRANT_URI_LOCAL")
-aws_region = os.getenv("AWS_REGION")
-neo4j_uri = os.getenv("NEO4J_URI_LOCAL")
+from config import config
 
 
 class GraphRetrieval:
     def __init__(self):
-        # Qdrant (Vector DB)
-        self.qdrant = QdrantClient(url=qdrant_uri)
-        self.collection_name = "dod_docs"
+        self.qdrant = QdrantClient(url=config.QDRANT_URI)
+        self.collection_name = config.COLLECTION_NAME
 
-        # Neo4j (Graph DB)
-        self.neo4j = GraphDatabase.driver(neo4j_uri, auth=("neo4j", neo4j_pw))
-
-        # Embedding model
-        self.model = SentenceTransformer("all-MiniLM-L6-v2")
-
-        # AWS Bedrock setup
-        self.bedrock = boto3.client(
-            "bedrock-runtime",
-            region_name=aws_region,
+        self.neo4j = GraphDatabase.driver(
+            config.NEO4J_URI, auth=("neo4j", config.NEO4J_PASSWORD)
         )
 
-        model_choice = "llama3-3-70b"
+        self.model = SentenceTransformer(config.EMBEDDING_MODEL)
+
+        self.bedrock = boto3.client(
+            "bedrock-runtime",
+            region_name=config.AWS_REGION,
+        )
+
+        model_choice = config.LLM_MODEL_CHOICE
 
         model_map = {
-            # Meta Llama Models
-            "llama3-1-8b": "us.meta.llama3-1-8b-instruct-v1:0",  # $138/mo - Fast, cheap, but repetition issues
-            "llama3-3-70b": "us.meta.llama3-3-70b-instruct-v1:0",  # $167/mo - Best quality/price
-            "llama3-1-70b": "us.meta.llama3-1-70b-instruct-v1:0",  # $167/mo - Same price as 3.3, use 3.3 instead
-            # Mistral Models (direct model IDs, not inference profiles)
-            "ministral-3b": "mistral.ministral-3-3b-instruct",  # $134/mo - Smallest, cheapest
-            "ministral-8b": "mistral.ministral-3-8b-instruct",  # $141/mo - Good alternative to Llama 8B
-            "ministral-14b": "mistral.ministral-3-14b-instruct",  # ~$150/mo - More capable Ministral
-            "mistral-large-3": "mistral.mistral-large-3-675b-instruct",  # $176/mo - Premium Mistral
-            # Claude Models (inference profiles)
-            "claude-haiku": "us.anthropic.claude-3-5-haiku-20241022-v2:0",  # $231/mo - Best quality, fastest
-            "claude-sonnet": "us.anthropic.claude-3-5-sonnet-20241022-v2:0",  # $640/mo - Overkill for your use case
+            "llama3-1-8b": "us.meta.llama3-1-8b-instruct-v1:0",
+            "llama3-3-70b": "us.meta.llama3-3-70b-instruct-v1:0",
+            "llama3-1-70b": "us.meta.llama3-1-70b-instruct-v1:0",
+            "ministral-3b": "mistral.ministral-3-3b-instruct",
+            "ministral-8b": "mistral.ministral-3-8b-instruct",
+            "ministral-14b": "mistral.ministral-3-14b-instruct",
+            "mistral-large-3": "mistral.mistral-large-3-675b-instruct",
+            "claude-haiku": "us.anthropic.claude-3-5-haiku-20241022-v2:0",
+            "claude-sonnet": "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
         }
 
         self.model_id = model_map[model_choice]
@@ -63,15 +43,11 @@ class GraphRetrieval:
         print(f"✅ Connected to Qdrant, Neo4j, and Bedrock")
         print(f"📊 Using model: {model_choice} ({self.model_id})")
 
-    # ==============================
-    # Graph + Vector Retrieval
-    # ==============================
     def graph_enhanced_search(self, query, top_k=4, expand_k=3):
         print("\n" + "=" * 60)
         print(f"QUERY: {query}")
         print("=" * 60)
 
-        # Vector search
         print("\n📍 Step 1: Vector search for initial chunks...")
         query_embedding = self.model.encode(query).tolist()
 
@@ -102,7 +78,6 @@ class GraphRetrieval:
             )
         print(f"Found {len(initial_chunks)} chunks from vector search")
 
-        # Super-communities
         with self.neo4j.session() as session:
             super_result = session.run(
                 """
@@ -120,7 +95,6 @@ class GraphRetrieval:
 
         super_ids = [sc["super_id"] for sc in super_communities]
 
-        # Expand chunks from L1 communities
         with self.neo4j.session() as session:
             result = session.run(
                 """
@@ -152,7 +126,6 @@ class GraphRetrieval:
                 )
                 embeddings.append(np.array(record["embedding"]))
 
-        # Semantic ranking
         if expanded_chunks:
             query_vec = np.array(query_embedding)
             sims = [
@@ -176,22 +149,11 @@ class GraphRetrieval:
 
         return all_chunks
 
-    # ==============================
-    # NON-STREAMING: Generate Answer
-    # ==============================
     def generate_answer_with_llm(self, query, chunks):
-        """
-        Generate answer using AWS Bedrock (non-streaming)
-
-        Args:
-            query: User query
-            chunks: Retrieved document chunks
-        """
         print("\n" + "=" * 60)
         print("🤖 GENERATING ANSWER WITH BEDROCK")
         print("=" * 60)
 
-        # Build context from chunks
         context_parts = []
         for i, chunk in enumerate(chunks, 1):
             source_tag = f"[{chunk['source']} p.{chunk['page']}]"
@@ -199,8 +161,7 @@ class GraphRetrieval:
 
         context = "\n\n".join(context_parts)
 
-        # Create prompt
-        prompt = f"""You are a helpful assistant answering questions about military and Department of Defense documents.
+        prompt = f"""You are a helpful assistant answering questions based on document context.
 
 Based on the following document excerpts, answer the user's question. Be specific and cite sources when possible.
 
@@ -250,22 +211,14 @@ ANSWER (be comprehensive but concise, do not ask if the user needs clarification
             print(f"❌ Bedrock error: {e}")
             return None
 
-    # ==============================
-    # STREAMING: Generate Answer
-    # ==============================
     def stream_answer_with_llm(self, query, chunks):
-        """
-        Generator function that streams Bedrock output token-by-token.
-        """
-        # Build context from chunks
         context_parts = []
         for chunk in chunks:
             source_tag = f"[{chunk['source']} p.{chunk['page']}]"
             context_parts.append(f"{source_tag}\n{chunk['content']}")
         context = "\n\n".join(context_parts)
 
-        # Create prompt
-        prompt = f"""You are a helpful assistant answering questions about military and Department of Defense documents.
+        prompt = f"""You are a helpful assistant answering questions based on document context.
 
 Based on the following document excerpts, answer the user's question. Be very specific and descriptive, cite sources when possible.
 
@@ -277,7 +230,6 @@ QUESTION: {query}
 ANSWER (be comprehensive but concise, do not ask if the user needs clarification):"""
 
         try:
-            # Call Bedrock with streaming
             response = self.bedrock.invoke_model_with_response_stream(
                 modelId=self.model_id,
                 contentType="application/json",
@@ -298,7 +250,6 @@ ANSWER (be comprehensive but concise, do not ask if the user needs clarification
                 ),
             )
 
-            # Stream the response
             stream = response.get("body")
             if stream:
                 for event in stream:
@@ -312,38 +263,25 @@ ANSWER (be comprehensive but concise, do not ask if the user needs clarification
         except Exception as e:
             yield f"Error streaming from Bedrock: {e}"
 
-    # ==============================
-    # Full pipeline (non-streaming)
-    # ==============================
     def run_complete_pipeline(self, query, top_k=4, expand_k=3):
         chunks = self.graph_enhanced_search(query, top_k, expand_k)
         answer = self.generate_answer_with_llm(query, chunks)
 
         return chunks, answer
 
-    # ==============================
-    # Close connections
-    # ==============================
     def close(self):
         self.qdrant.close()
         self.neo4j.close()
 
 
-# ==============================
-# TEST
-# ==============================
 if __name__ == "__main__":
     retriever = GraphRetrieval()
 
     test_queries = [
-        "What key rules in the II-208-29 Rulebook affect cargo inspection procedures?",
-        "How does terrain analysis at Buckley Space Force Base affect transportation planning?",
-        "How are 463L pallets tracked across multiple deployments?",
-        "What systems protect sensitive cargo during air transport?",
-        "What procedures are in place for coordinating military shipments during contingency operations?",
-        "How are damaged pallets logged and reported in DoD operations?",
-        "During amphibious operations, what are the responsibilities of a combat cargo officer in coordinating ship-to-shore movement and managing landing force operational reserve material (LFORM)?",
-        "What strategies should the Department of Defense implement to adapt military installations and operations to climate change while maintaining readiness?",
+        "What are the key procedures outlined in the documentation?",
+        "How does the system handle data processing workflows?",
+        "What tracking mechanisms are described in the documents?",
+        "What security measures are implemented for data protection?",
     ]
 
     for i, query in enumerate(test_queries, 1):

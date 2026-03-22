@@ -1,4 +1,3 @@
-# main.py
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -6,38 +5,29 @@ from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 import requests
 
-from graph_retrieval import (
-    GraphRetrieval,
-)
+from graph_retrieval import GraphRetrieval
+from config import config
 
 app = FastAPI(title="Graph RAG + Bedrock")
 
-# -----------------------------
-# CORS configuration
-# -----------------------------
+allowed_origins = config.ALLOWED_ORIGINS.split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
 
-# -----------------------------
-# Request & Response Models
-# -----------------------------
 class QueryRequest(BaseModel):
     query: str
 
 
-# Instantiate the retriever once for the app
 retriever = GraphRetrieval()
 
 
-# -----------------------------
-# Root endpoint
-# -----------------------------
 @app.get("/")
 async def root():
     return {
@@ -46,14 +36,10 @@ async def root():
     }
 
 
-# -----------------------------
-# POST endpoint for frontend queries
-# -----------------------------
 @app.post("/ask/")
 async def search_query(payload: QueryRequest):
     query = payload.query
     try:
-        # Run the complete pipeline (retrieval + Ollama)
         chunks, answer = retriever.run_complete_pipeline(query)
 
         if answer is None:
@@ -62,7 +48,6 @@ async def search_query(payload: QueryRequest):
                 content={"error": "Failed to generate answer from Ollama"},
             )
 
-        # Return answer (and optionally the chunks)
         return JSONResponse(
             content={
                 "query": query,
@@ -85,7 +70,6 @@ async def search_query_stream(payload: QueryRequest):
         chunks = retriever.graph_enhanced_search(query)
         generator = retriever.stream_answer_with_llm(query, chunks)
 
-        # StreamingResponse sends token-by-token
         return StreamingResponse(generator, media_type="text/plain")
     except Exception as e:
         return JSONResponse(

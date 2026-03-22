@@ -25,9 +25,6 @@ COPY rag-project/rag_ingest_qdrant.py .
 COPY rag-project/text_extraction2.py .
 COPY rag-project/pdf_cleaning4.py .
 
-# Copy any other necessary files
-COPY .env .env
-
 # Expose FastAPI port
 EXPOSE 8000
 
